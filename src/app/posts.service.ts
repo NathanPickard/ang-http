@@ -1,25 +1,41 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { map } from 'rxjs/operators';
+import { HttpClient, HttpHeaders, HttpParams, HttpEventType } from '@angular/common/http';
+import { map, catchError, tap } from 'rxjs/operators';
+import { Subject, throwError } from 'rxjs';
 
 import { Post } from './post.model';
 
 @Injectable({ providedIn: 'root' })
 export class PostsService {
+  error = new Subject<string>();
 
   constructor(private http: HttpClient) { }
 
   createAndStorePost(title: string, content: string) {
     const postData: Post = { title: title, content: content };
-    this.http.post<{ name: string }>('https://ang-http-bd40f.firebaseio.com/post.json', postData)
+    this.http.post<{ name: string }>('https://ang-http-bd40f.firebaseio.com/post.json', postData,
+      {
+        observe: 'response'
+      })
       .subscribe(responseData => {
         console.log(responseData);
+      }, error => {
+        this.error.next(error.message);
       });
   }
 
   fetchPosts() {
+    let searchParams = new HttpParams();
+    searchParams = searchParams.append('print', 'pretty');
+    searchParams = searchParams.append('custom', 'key');
     return this.http
-      .get<{ [key: string]: Post }>('https://ang-http-bd40f.firebaseio.com/post.json')
+      .get<{ [key: string]: Post }>('https://ang-http-bd40f.firebaseio.com/post.json',
+        {
+          headers: new HttpHeaders({ 'Custom-Header': 'Hello' }),
+          params: searchParams,
+          responseType: 'json'
+        }
+      )
       .pipe(
         map(responseData => {
           const postsArray: Post[] = [];
@@ -29,12 +45,30 @@ export class PostsService {
             }
           }
           return postsArray;
+        }),
+        catchError(errorRes => {
+          return throwError(errorRes);
         })
       );
   }
 
   deletePosts() {
-    return this.http.delete('https://ang-http-bd40f.firebaseio.com/post.json')
+    return this.http.delete('https://ang-http-bd40f.firebaseio.com/post.json',
+      {
+        observe: 'events',
+        // reponseType: 'text'
+      })
+      .pipe(
+        tap(event => {
+          console.log(event);
+          if (event.type === HttpEventType.Sent) {
+            // ...
+          }
+          if (event.type === HttpEventType.Response) {
+            console.log(event.body);
+          }
+        })
+      );
   }
 
 }
